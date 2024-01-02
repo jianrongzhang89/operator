@@ -87,3 +87,36 @@ func (r *BackstageReconciler) reconcilePsqlService(ctx context.Context, backstag
 	}
 	return nil
 }
+
+func (r *BackstageReconciler) psqlServiceObjectMutFun(ctx context.Context, service *corev1.Service, backstage bs.Backstage, label, ns, key string) controllerutil.MutateFn {
+	return func() error {
+		tmp := service.DeepCopy()
+		err := r.readConfigMapOrDefault(ctx, backstage.Spec.RawRuntimeConfig.LocalDbConfigName, key, ns, service)
+		if err != nil {
+			return err
+		}
+		service.SetName(tmp.Name)
+		setBackstageLocalDbLabel(&service.ObjectMeta.Labels, label)
+		setBackstageLocalDbLabel(&service.Spec.Selector, label)
+
+		if r.OwnsRuntime {
+			if err := controllerutil.SetControllerReference(&backstage, service, r.Scheme); err != nil {
+				return fmt.Errorf(ownerRefFmt, err)
+			}
+		}
+		if len(tmp.Spec.ClusterIP) > 0 && service.Spec.ClusterIP != "" && service.Spec.ClusterIP != "None" && service.Spec.ClusterIP != tmp.Spec.ClusterIP {
+			return fmt.Errorf("db service IP can not be updated: %s, %s, %s", tmp.Name, tmp.Spec.ClusterIP, service.Spec.ClusterIP)
+		}
+		service.Spec.ClusterIP = tmp.Spec.ClusterIP
+		for _, ip1 := range tmp.Spec.ClusterIPs {
+			for _, ip2 := range service.Spec.ClusterIPs {
+				if len(ip1) > 0 && ip2 != "" && ip2 != "None" && ip1 != ip2 {
+					return fmt.Errorf("db service IPs can not be updated: %s, %v, %v", tmp.Name, tmp.Spec.ClusterIPs, service.Spec.ClusterIPs)
+				}
+			}
+		}
+		service.Spec.ClusterIPs = tmp.Spec.ClusterIPs
+
+		return nil
+	}
+}

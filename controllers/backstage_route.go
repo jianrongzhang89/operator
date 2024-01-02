@@ -37,7 +37,7 @@ func (r *BackstageReconciler) reconcileBackstageRoute(ctx context.Context, backs
 		},
 	}
 
-	if !shouldCreateRoute(*backstage) {
+	if !shouldCreateRoute(backstage) {
 		deleted, err := r.cleanupResource(ctx, route, *backstage)
 		if err == nil && deleted {
 			setStatusCondition(backstage, bs.RouteSynced, metav1.ConditionTrue, bs.Deleted, "")
@@ -87,7 +87,32 @@ func (r *BackstageReconciler) routeObjectMutFun(ctx context.Context, targetRoute
 	}
 }
 
-func (r *BackstageReconciler) applyRouteParamsFromCR(route *openshift.Route, backstage bs.Backstage) {
+func (r *BackstageReconciler) routeObjectMutFun(ctx context.Context, route *openshift.Route, backstage *bs.Backstage, ns string) controllerutil.MutateFn {
+	return func() error {
+		err := r.readConfigMapOrDefault(ctx, backstage.Spec.RawRuntimeConfig.BackstageConfigName, "route.yaml", ns, route)
+		if err != nil {
+			return err
+		}
+
+		// Override the route and service names
+		name := fmt.Sprintf("backstage-%s", backstage.Name)
+		route.Name = name
+		route.Spec.To.Name = route.Name
+
+		r.labels(&route.ObjectMeta, *backstage)
+
+		r.applyRouteParamsFromCR(route, backstage)
+
+		if r.OwnsRuntime {
+			if err := controllerutil.SetControllerReference(backstage, route, r.Scheme); err != nil {
+				return fmt.Errorf("failed to set owner reference: %s", err)
+			}
+		}
+		return nil
+	}
+}
+
+func (r *BackstageReconciler) applyRouteParamsFromCR(route *openshift.Route, backstage *bs.Backstage) {
 	if backstage.Spec.Application == nil || backstage.Spec.Application.Route == nil {
 		return // Nothing to override
 	}
@@ -133,7 +158,7 @@ func (r *BackstageReconciler) applyRouteParamsFromCR(route *openshift.Route, bac
 	}
 }
 
-func shouldCreateRoute(backstage bs.Backstage) bool {
+func shouldCreateRoute(backstage *bs.Backstage) bool {
 	if backstage.Spec.Application == nil {
 		return true
 	}

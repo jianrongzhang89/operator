@@ -218,6 +218,51 @@ func (r *BackstageReconciler) addParams(ctx context.Context, backstage bs.Backst
 	return nil
 }
 
+func (r *BackstageReconciler) deploymentObjectMutFun(ctx context.Context, deployment *appsv1.Deployment, backstage bs.Backstage, ns string) controllerutil.MutateFn {
+	return func() error {
+		err := r.readConfigMapOrDefault(ctx, backstage.Spec.RawRuntimeConfig.BackstageConfigName, "deployment.yaml", ns, deployment)
+		if err != nil {
+			return fmt.Errorf("failed to read config: %s", err)
+		}
+
+		// Override deployment name
+		deployment.Name = fmt.Sprintf("backstage-%s", backstage.Name)
+
+		r.setDefaultDeploymentImage(deployment)
+
+		r.applyBackstageLabels(backstage, deployment)
+
+		if err = r.addVolumes(ctx, backstage, ns, deployment); err != nil {
+			return fmt.Errorf("failed to add volumes to Backstage deployment, reason: %s", err)
+		}
+
+		if err = r.addVolumeMounts(ctx, backstage, ns, deployment); err != nil {
+			return fmt.Errorf("failed to add volume mounts to Backstage deployment, reason: %s", err)
+		}
+
+		if err = r.addContainerArgs(ctx, backstage, ns, deployment); err != nil {
+			return fmt.Errorf("failed to add container args to Backstage deployment, reason: %s", err)
+		}
+
+		if err = r.addEnvVars(backstage, ns, deployment); err != nil {
+			return fmt.Errorf("failed to add env vars to Backstage deployment, reason: %s", err)
+		}
+
+		r.applyApplicationParamsFromCR(backstage, deployment)
+
+		if err = r.validateAndUpdatePsqlSecretRef(backstage, deployment); err != nil {
+			return fmt.Errorf("failed to validate database secret, reason: %s", err)
+		}
+
+		if r.OwnsRuntime {
+			if err = controllerutil.SetControllerReference(&backstage, deployment, r.Scheme); err != nil {
+				return fmt.Errorf("failed to set owner reference: %s", err)
+			}
+		}
+		return nil
+	}
+}
+
 func (r *BackstageReconciler) addVolumes(ctx context.Context, backstage bs.Backstage, ns string, deployment *appsv1.Deployment) error {
 	dpConfVol, err := r.getDynamicPluginsConfVolume(ctx, backstage, ns)
 	if err != nil {
