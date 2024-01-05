@@ -148,7 +148,10 @@ func (r *BackstageReconciler) reconcileLocalDbStatefulSet(ctx context.Context, b
 		if errors.IsConflict(err) {
 			return fmt.Errorf("retry sync needed: %v", err)
 		}
-		return err
+		msg := fmt.Sprintf("failed to sync Database StatefulSet: %s", err.Error())
+		setStatusCondition(&backstage, bs.ConditionSynced, metav1.ConditionFalse, bs.SyncFailed, msg)
+		setStatusCondition(&backstage, bs.ConditionLocalDbSynced, metav1.ConditionFalse, bs.SyncFailed, msg)
+		return fmt.Errorf(msg)
 	}
 	return nil
 }

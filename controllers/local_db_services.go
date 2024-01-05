@@ -83,7 +83,9 @@ func (r *BackstageReconciler) reconcilePsqlService(ctx context.Context, backstag
 		if errors.IsConflict(err) {
 			return fmt.Errorf("retry sync needed: %v", err)
 		}
-		return err
+		msg := fmt.Sprintf("failed to sync database service: %s", err.Error())
+		setStatusCondition(&backstage, bs.ConditionSynced, metav1.ConditionFalse, bs.SyncFailed, msg)
+		setStatusCondition(&backstage, bs.ConditionLocalDbSynced, metav1.ConditionFalse, bs.SyncFailed, msg)
 	}
 	return nil
 }

@@ -26,7 +26,7 @@ import (
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 )
 
-func (r *BackstageReconciler) reconcileBackstageService(ctx context.Context, backstage bs.Backstage, ns string) error {
+func (r *BackstageReconciler) reconcileBackstageService(ctx context.Context, backstage *bs.Backstage, ns string) error {
 	service := &corev1.Service{
 		ObjectMeta: metav1.ObjectMeta{
 			Name:      getDefaultObjName(backstage),
@@ -38,7 +38,8 @@ func (r *BackstageReconciler) reconcileBackstageService(ctx context.Context, bac
 		if errors.IsConflict(err) {
 			return fmt.Errorf("retry sync needed: %v", err)
 		}
-		return err
+		msg := fmt.Sprintf("failed to sync Backstage Service: %s", err.Error())
+		setStatusCondition(backstage, bs.ConditionSynced, metav1.ConditionFalse, bs.SyncFailed, msg)
 	}
 	return nil
 }
