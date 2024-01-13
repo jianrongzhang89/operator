@@ -40,7 +40,7 @@ func (r *BackstageReconciler) reconcileBackstageRoute(ctx context.Context, backs
 	if !shouldCreateRoute(backstage) {
 		deleted, err := r.cleanupResource(ctx, route, *backstage)
 		if err == nil && deleted {
-			setStatusCondition(backstage, bs.RouteSynced, metav1.ConditionTrue, bs.Deleted, "")
+			setStatusCondition(backstage, bs.ConditionRouteSynced, metav1.ConditionTrue, bs.Deleted, "")
 		}
 		return err
 	}

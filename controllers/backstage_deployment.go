@@ -148,7 +148,7 @@ func visitContainers(podTemplateSpec *v1.PodTemplateSpec, visitor ContainerVisit
 
 func (r *BackstageReconciler) reconcileBackstageDeployment(ctx context.Context, backstage *bs.Backstage, ns string) error {
 	deployment := &appsv1.Deployment{ObjectMeta: metav1.ObjectMeta{
-		Name:      getDefaultObjName(backstage),
+		Name:      getDefaultObjName(*backstage),
 		Namespace: ns},
 	}
 	if _, err := controllerutil.CreateOrUpdate(ctx, r.Client, deployment, r.deploymentObjectMutFun(ctx, deployment, *backstage, ns)); err != nil {
